@@ -18,4 +18,3 @@ export default withMT({
   },
   plugins: [],
 });
-
