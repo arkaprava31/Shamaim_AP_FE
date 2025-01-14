@@ -253,7 +253,7 @@ const ProductManagement = () => {
         { value: 'Sweatshirts', subcategories: ['Classic Fit', 'Drop Shoulder'] },
     ];
 
-    const genres = ['Anime', 'Movies & Series', 'Superhero', 'Abstract'];
+    const genres = ['Anime', 'Movies & Series', 'Superhero', 'Abstract', 'Bangla O Bangali', 'Drip & Doodle', 'Sports', 'Music&Band'];
 
     const sizes = ['M', 'L', 'XL'];
 
