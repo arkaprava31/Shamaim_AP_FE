@@ -1,1 +1,1 @@
-export const backendServer = 'https://shamaim-ap-be.vercel.app/';
+export const backendServer = 'https://shamaim-ap-be.vercel.app';
