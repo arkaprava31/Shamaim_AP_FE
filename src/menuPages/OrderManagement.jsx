@@ -103,14 +103,14 @@ const OrderManagement = () => {
                                                                 <div className="w-full truncate">{item.name}</div>
                                                                 <div>Size: {item.size.name}</div>
                                                             </div>
-                                                            <div className="">{item.quantity} x {new Intl.NumberFormat('en-US', {
+                                                            <div className="">{item.units} x {new Intl.NumberFormat('en-US', {
                                                                 style: 'currency',
                                                                 currency: 'INR',
                                                             }).format(item.selling_price)}</div>
                                                             <div className="font-semibold">{new Intl.NumberFormat('en-US', {
                                                                 style: 'currency',
                                                                 currency: 'INR',
-                                                            }).format(item.quantity * item.selling_price)}</div>
+                                                            }).format(item.units * item.selling_price)}</div>
                                                         </div>
                                                     )
                                                 })
@@ -134,11 +134,27 @@ const OrderManagement = () => {
                                                 <div className="font-semibold">State: <span className='font-normal'>{odr.items[0].selectedAddress.state}</span></div>
                                                 <div className="font-semibold">Pin Code: <span className='font-normal'>{odr.items[0].selectedAddress.pinCode}</span></div>
 
-                                                <div className="font-semibold mt-1.5">Contact No.: <span className='font-normal'>{odr.items[0].selectedAddress.phone}</span></div>
+                                                <div className="font-semibold mt-0.5">Contact No.: <span className='font-normal'>{odr.items[0].selectedAddress.phone}</span></div>
                                             </div>
                                             <div className="w-full flex flex-col items-start justify-start gap-0.5">
                                                 <div className="w-fit bg-black text-main px-2 py-1 rounded-md my-1.5">Payment Details:</div>
                                                 <div className="font-semibold">Mode of payment: <span className='font-normal'>{odr.paymentDetails[0].payMode}</span></div>
+
+                                                {
+                                                    odr.calculatedTotalAmount > odr.totalAmount ?
+                                                        <div className='w-full flex flex-col items-start justify-start'>
+                                                            <div className='text-green-600 font-semibold'>Discount applied!</div>
+                                                            {
+                                                                odr.calculatedTotalAmount - odr.totalAmount == 100 ?
+                                                                <div className='text-gray-700'>Coupon applied: <span className='font-semibold'>FORYOU100</span> ({new Intl.NumberFormat('en-US', {
+                                                                    style: 'currency',
+                                                                    currency: 'INR',
+                                                                }).format(100)}) </div>
+                                                                : null
+                                                            }
+                                                        </div>
+                                                        : null
+                                                }
 
                                                 <div className="w-fit bg-black text-main px-2 py-1 rounded-md my-1.5">Shiprocket Details:</div>
                                                 <div className="font-semibold">Order Id: <span className='font-normal'>{odr.shiprocketResponse[0].order_id || 'Not found!'}</span></div>

@@ -14,6 +14,9 @@ import {
 } from "@material-tailwind/react";
 import { GrNext, GrPrevious } from 'react-icons/gr';
 import { FiEdit } from 'react-icons/fi';
+import ImageUpload from '../components/ImageUpload';
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import firebaseApp from '../utils/firebaseConfig';
 
 const ProductManagement = () => {
 
@@ -58,6 +61,7 @@ const ProductManagement = () => {
         fit: '',
         neckType: '',
         pattern: '',
+        thumbnail: null,
         stock: {}
     });
 
@@ -146,9 +150,10 @@ const ProductManagement = () => {
             'fit',
             'neckType',
             'pattern',
+            'thumbnail',
             ...(!isUpdate ? ['category', 'subcategory', 'highlight'] : []),
         ];
-        
+
 
         const emptyFields = requiredFields.filter((field) => !newPdt[field]);
 
@@ -176,8 +181,17 @@ const ProductManagement = () => {
 
         try {
 
+            let thumbnailURL = '';
+
+            if (newPdt.thumbnail) {
+                const storage = getStorage(firebaseApp);
+                const storageRef = ref(storage, `thumbnails/${Date.now()}-${newPdt.thumbnail.name}`);
+                const uploadResult = await uploadBytes(storageRef, newPdt.thumbnail);
+                thumbnailURL = await getDownloadURL(uploadResult.ref);
+            }
+
             const product = {
-                ...( !isUpdate && { id: products[products.length - 1]?.id + 1 } ),
+                ...(!isUpdate && { id: products[products.length - 1]?.id + 1 }),
                 title: newPdt.title,
                 Style: newPdt.style,
                 genre: newPdt.genre,
@@ -200,6 +214,7 @@ const ProductManagement = () => {
                 subcategory: newPdt.subcategory,
                 price: newPdt.mrp,
                 discountPercentage: newPdt.discount,
+                thumbnail: thumbnailURL,
             };
 
             if (isUpdate) {
@@ -237,6 +252,7 @@ const ProductManagement = () => {
                 fit: '',
                 neckType: '',
                 pattern: '',
+                thumbnail: null,
                 stock: {}
             });
 
@@ -702,6 +718,10 @@ const ProductManagement = () => {
                                 <div>No size selected!</div>
                             }
                         </div>
+
+                        <div className="w-full text-left text-black font-semibold text-lg bg-main p-1 pl-2.5 rounded-md">Product Images:</div>
+
+                        <ImageUpload newPdt={newPdt} setNewPdt={setNewPdt} />
 
                         <div className="w-full flex items-center justify-end gap-2.5">
                             <button onClick={(e) => { e.preventDefault(); setIsAdd(false) }}
