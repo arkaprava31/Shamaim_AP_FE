@@ -121,7 +121,8 @@ const ProductManagement = () => {
                 fit: response.data.Fit,
                 neckType: response.data.NeckType,
                 pattern: response.data.Pattern,
-                stock: response.data.stock || {}
+                stock: response.data.stock || {},
+                thumbnail: response.data.thumbnail
             });
 
             setLoading(false);
@@ -150,10 +151,8 @@ const ProductManagement = () => {
             'fit',
             'neckType',
             'pattern',
-            'thumbnail',
-            ...(!isUpdate ? ['category', 'subcategory', 'highlight'] : []),
+            ...(!isUpdate ? ['category', 'subcategory', 'highlight', 'thumbnail'] : []),
         ];
-
 
         const emptyFields = requiredFields.filter((field) => !newPdt[field]);
 
@@ -180,10 +179,9 @@ const ProductManagement = () => {
         }
 
         try {
+            let thumbnailURL = newPdt.thumbnail;
 
-            let thumbnailURL = '';
-
-            if (newPdt.thumbnail) {
+            if (newPdt.thumbnail instanceof File) {
                 const storage = getStorage(firebaseApp);
                 const storageRef = ref(storage, `thumbnails/${Date.now()}-${newPdt.thumbnail.name}`);
                 const uploadResult = await uploadBytes(storageRef, newPdt.thumbnail);
@@ -218,13 +216,13 @@ const ProductManagement = () => {
             };
 
             if (isUpdate) {
-                const response = await axios.put(`${backendServer}/api/updateProduct/${currId}`, { product: product });
+                const response = await axios.put(`${backendServer}/api/updateProduct/${currId}`, { product });
                 toast.success(response.data.message);
                 setIsAdd(false);
                 setIsUpdate(false);
                 setCurrId(null);
             } else {
-                const response = await axios.post(`${backendServer}/api/newProduct`, { product: product });
+                const response = await axios.post(`${backendServer}/api/newProduct`, { product });
                 toast.success(response.data.message);
                 setIsAdd(false);
             }
@@ -253,9 +251,8 @@ const ProductManagement = () => {
                 neckType: '',
                 pattern: '',
                 thumbnail: null,
-                stock: {}
+                stock: {},
             });
-
         } catch (error) {
             toast.error(error.response.data.message);
         }
@@ -722,6 +719,15 @@ const ProductManagement = () => {
                         <div className="w-full text-left text-black font-semibold text-lg bg-main p-1 pl-2.5 rounded-md">Product Images:</div>
 
                         <ImageUpload newPdt={newPdt} setNewPdt={setNewPdt} />
+
+                        {
+                            newPdt.thumbnail ?
+                                <div className='w-full flex flex-col items-start gap-2'>
+                                    <div className='font-semibold'>Uploaded thumbnail:</div>
+                                    <img className='w-[8rem] aspect-auto' src={newPdt.thumbnail} alt="thumbnail" />
+                                </div>
+                                : null
+                        }
 
                         <div className="w-full flex items-center justify-end gap-2.5">
                             <button onClick={(e) => { e.preventDefault(); setIsAdd(false) }}
