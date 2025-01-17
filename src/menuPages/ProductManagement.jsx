@@ -62,7 +62,8 @@ const ProductManagement = () => {
         neckType: '',
         pattern: '',
         thumbnail: null,
-        stock: {}
+        stock: {},
+        images: []
     });
 
     const handleChange = (e) => {
@@ -122,7 +123,8 @@ const ProductManagement = () => {
                 neckType: response.data.NeckType,
                 pattern: response.data.Pattern,
                 stock: response.data.stock || {},
-                thumbnail: response.data.thumbnail
+                thumbnail: response.data.thumbnail,
+                images: response.data.images
             });
 
             setLoading(false);
@@ -151,7 +153,7 @@ const ProductManagement = () => {
             'fit',
             'neckType',
             'pattern',
-            ...(!isUpdate ? ['category', 'subcategory', 'highlight', 'thumbnail'] : []),
+            ...(!isUpdate ? ['category', 'subcategory', 'highlight', 'thumbnail', 'images'] : []),
         ];
 
         const emptyFields = requiredFields.filter((field) => !newPdt[field]);
@@ -188,6 +190,20 @@ const ProductManagement = () => {
                 thumbnailURL = await getDownloadURL(uploadResult.ref);
             }
 
+            const productImagesURLs = [];
+
+            for (const image of newPdt.images) {
+                if (image instanceof File) {
+                    const storage = getStorage(firebaseApp);
+                    const storageRef = ref(storage, `product-images/${Date.now()}-${image.name}`);
+                    const uploadResult = await uploadBytes(storageRef, image);
+                    const imageURL = await getDownloadURL(uploadResult.ref);
+                    productImagesURLs.push(imageURL);
+                } else {
+                    productImagesURLs.push(image);
+                }
+            }
+
             const product = {
                 ...(!isUpdate && { id: products[products.length - 1]?.id + 1 }),
                 title: newPdt.title,
@@ -213,6 +229,7 @@ const ProductManagement = () => {
                 price: newPdt.mrp,
                 discountPercentage: newPdt.discount,
                 thumbnail: thumbnailURL,
+                images: productImagesURLs
             };
 
             if (isUpdate) {
@@ -252,6 +269,7 @@ const ProductManagement = () => {
                 pattern: '',
                 thumbnail: null,
                 stock: {},
+                images: []
             });
         } catch (error) {
             toast.error(error.response.data.message);
@@ -306,7 +324,35 @@ const ProductManagement = () => {
             <div className="w-full text-left text-2xl font-semibold">Product Management</div>
             <div className="w-full h-[3px] bg-main"></div>
             <div className={`w-full text-left ${isAdd ? 'hidden' : 'block'}`}>
-                <button onClick={() => setIsAdd(true)} disabled={loading} className='bg-black text-white px-3.5 py-2 rounded-md'>Add Product</button>
+                <button onClick={() => {
+                    setIsAdd(true);
+                    setIsUpdate(false);
+                    setNewPdt({
+                        title: '',
+                        style: '',
+                        code: '',
+                        mrp: 0,
+                        discount: 0,
+                        offerPrice: 0,
+                        gender: '',
+                        category: '',
+                        subcategory: '',
+                        genre: [],
+                        color: '',
+                        size: [],
+                        gsm: '',
+                        highlight: '',
+                        aboutDesign: '',
+                        material: '',
+                        sleeve: '',
+                        fit: '',
+                        neckType: '',
+                        pattern: '',
+                        thumbnail: null,
+                        stock: {},
+                        images: []
+                    });
+                }} disabled={loading} className='bg-black text-white px-3.5 py-2 rounded-md'>Add Product</button>
             </div>
 
             {
@@ -721,13 +767,39 @@ const ProductManagement = () => {
                         <ImageUpload newPdt={newPdt} setNewPdt={setNewPdt} />
 
                         {
-                            newPdt.thumbnail ?
+                            newPdt.thumbnail && isUpdate ?
                                 <div className='w-full flex flex-col items-start gap-2'>
                                     <div className='font-semibold'>Uploaded thumbnail:</div>
                                     <img className='w-[8rem] aspect-auto' src={newPdt.thumbnail} alt="thumbnail" />
                                 </div>
                                 : null
                         }
+
+                        <div className='w-full flex items-center justify-start gap-4'>
+                            <label htmlFor="images" className="font-semibold text-lg text-nowrap">Product Images:</label>
+                            <input
+                                type="file"
+                                id="images"
+                                accept="image/*"
+                                multiple
+                                onChange={(e) => setNewPdt({ ...newPdt, images: Array.from(e.target.files) })}
+                            />
+                        </div>
+                        <div className='w-full flex flex-col items-start gap-2'>
+                            { newPdt.images.length != 0 && <p className="text-sm font-medium text-gray-700">Image preview:</p> }
+                            <div className="w-full flex items-start justify-start gap-3.5">
+                                {newPdt.images && newPdt.images.map((image, index) => (
+                                    <div key={index}>
+                                        <img
+                                            src={image instanceof File ? URL.createObjectURL(image) : image}
+                                            alt={`Product-${index}`}
+                                            className='w-[8rem] aspect-auto'
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
 
                         <div className="w-full flex items-center justify-end gap-2.5">
                             <button onClick={(e) => { e.preventDefault(); setIsAdd(false) }}
