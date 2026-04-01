@@ -50,6 +50,7 @@ const ProductManagement = () => {
         gender: '',
         category: '',
         subcategory: '',
+        isSolid: false,
         genre: [],
         color: '',
         size: [],
@@ -97,11 +98,14 @@ const ProductManagement = () => {
     const [updatePdt, setUpdatePdt] = useState({});
 
     const updateProduct = async (id) => {
-
-        setLoading(true);
-
         try {
             const response = await axios.get(`${backendServer}/api/getProduct/${id}`);
+
+            const selectedCategory = categories.find(
+                (cat) => cat.value === response.data.category
+            );
+
+            setSubcategories(selectedCategory ? selectedCategory.subcategories : []);
 
             setNewPdt({
                 title: response.data.title,
@@ -109,9 +113,13 @@ const ProductManagement = () => {
                 code: response.data.ProductCode,
                 mrp: response.data.price,
                 discount: response.data.discountPercentage,
-                gender: response.data.gender === 'men' || response.data.gender === 'Male' ? 'Male' : 'Female',
+                gender:
+                    response.data.gender === 'men' || response.data.gender === 'Male'
+                        ? 'Male'
+                        : 'Female',
                 category: response.data.category,
                 subcategory: response.data.subcategory,
+                isSolid: response.data.isSolid || false,
                 genre: response.data.genre || [],
                 color: response.data.color,
                 size: response.data.size || [],
@@ -122,16 +130,15 @@ const ProductManagement = () => {
                 fit: response.data.Fit,
                 neckType: response.data.NeckType,
                 pattern: response.data.Pattern,
-                stock: response.data.stock || {},
+                stock: Array.isArray(response.data.stock)
+                    ? response.data.stock[0] || {}
+                    : response.data.stock || {},
                 thumbnail: response.data.thumbnail,
-                images: response.data.images
+                images: response.data.images || []
             });
 
-            setLoading(false);
-
         } catch (error) {
-            setLoading(false);
-            toast.error(error.response.data.message);
+            toast.error(error.response?.data?.message || 'Error loading product');
         }
     };
 
@@ -153,30 +160,59 @@ const ProductManagement = () => {
             'fit',
             'neckType',
             'pattern',
-            ...(!isUpdate ? ['category', 'subcategory', 'highlight', 'thumbnail', 'images'] : []),
+            'category',
+            'subcategory',
+            ...(!isUpdate ? ['thumbnail', 'images'] : []),
         ];
 
-        const emptyFields = requiredFields.filter((field) => !newPdt[field]);
+        const emptyFields = requiredFields.filter(
+            (field) =>
+                newPdt[field] === null ||
+                newPdt[field] === undefined ||
+                newPdt[field].toString().trim() === ""
+        );
 
         if (emptyFields.length > 0) {
-            toast.error(`All the fields are required!`);
+            toast.error("All fields are required!");
             return;
         }
 
-        if (!isUpdate && newPdt.genre.length === 0) {
-            toast.error('Please select at least one genre.');
+        if (newPdt.mrp <= 0) {
+            toast.error("MRP must be greater than 0.");
+            return;
+        }
+
+        if (newPdt.discount < 0 || newPdt.discount > 100) {
+            toast.error("Discount must be between 0 and 100.");
             return;
         }
 
         if (newPdt.size.length === 0) {
-            toast.error('Please select at least one size.');
+            toast.error("Please select at least one size.");
             return;
         }
 
-        const invalidStock = newPdt.size.some((size) => !newPdt.stock[size] || newPdt.stock[size] <= 0);
+        const invalidStock = newPdt.size.some(
+            (size) => newPdt.stock[size] === undefined || newPdt.stock[size] < 0
+        );
 
         if (invalidStock) {
-            toast.error('Please enter valid stock values for all selected sizes.');
+            toast.error("Enter valid stock values.");
+            return;
+        }
+
+        if (!isUpdate && !newPdt.thumbnail) {
+            toast.error("Thumbnail is required.");
+            return;
+        }
+
+        if (!isUpdate && newPdt.images.length === 0) {
+            toast.error("Upload at least one product image.");
+            return;
+        }
+
+        if (!newPdt.isSolid && newPdt.genre.length === 0) {
+            toast.error("Please select at least one genre for printed products.");
             return;
         }
 
@@ -185,7 +221,10 @@ const ProductManagement = () => {
 
             if (newPdt.thumbnail instanceof File) {
                 const storage = getStorage(firebaseApp);
-                const storageRef = ref(storage, `thumbnails/${Date.now()}-${newPdt.thumbnail.name}`);
+                const storageRef = ref(
+                    storage,
+                    `thumbnails/${Date.now()}-${newPdt.thumbnail.name}`
+                );
                 const uploadResult = await uploadBytes(storageRef, newPdt.thumbnail);
                 thumbnailURL = await getDownloadURL(uploadResult.ref);
             }
@@ -195,7 +234,10 @@ const ProductManagement = () => {
             for (const image of newPdt.images) {
                 if (image instanceof File) {
                     const storage = getStorage(firebaseApp);
-                    const storageRef = ref(storage, `product-images/${Date.now()}-${image.name}`);
+                    const storageRef = ref(
+                        storage,
+                        `product-images/${Date.now()}-${image.name}`
+                    );
                     const uploadResult = await uploadBytes(storageRef, image);
                     const imageURL = await getDownloadURL(uploadResult.ref);
                     productImagesURLs.push(imageURL);
@@ -204,11 +246,14 @@ const ProductManagement = () => {
                 }
             }
 
+            const finalGenre = newPdt.isSolid ? [] : newPdt.genre;
+
             const product = {
                 ...(!isUpdate && { id: products[products.length - 1]?.id + 1 }),
                 title: newPdt.title,
                 Style: newPdt.style,
-                genre: newPdt.genre,
+                isSolid: newPdt.isSolid,
+                genre: finalGenre,
                 ProductCode: newPdt.code,
                 SleeveLength: newPdt.sleeve,
                 Fit: newPdt.fit,
@@ -223,7 +268,7 @@ const ProductManagement = () => {
                 gender: newPdt.gender,
                 color: newPdt.color,
                 size: newPdt.size,
-                stock: newPdt.stock,
+                stock: [newPdt.stock],
                 category: newPdt.category,
                 subcategory: newPdt.subcategory,
                 price: newPdt.mrp,
@@ -233,16 +278,22 @@ const ProductManagement = () => {
             };
 
             if (isUpdate) {
-                const response = await axios.put(`${backendServer}/api/updateProduct/${currId}`, { product });
+                const response = await axios.put(
+                    `${backendServer}/api/updateProduct/${currId}`,
+                    { product }
+                );
                 toast.success(response.data.message);
-                setIsAdd(false);
                 setIsUpdate(false);
-                setCurrId(null);
             } else {
-                const response = await axios.post(`${backendServer}/api/newProduct`, { product });
+                const response = await axios.post(
+                    `${backendServer}/api/newProduct`,
+                    { product }
+                );
                 toast.success(response.data.message);
-                setIsAdd(false);
             }
+
+            setIsAdd(false);
+            setCurrId(null);
 
             await getAllProducts();
 
@@ -256,6 +307,7 @@ const ProductManagement = () => {
                 gender: '',
                 category: '',
                 subcategory: '',
+                isSolid: false,
                 genre: [],
                 color: '',
                 size: [],
@@ -271,8 +323,9 @@ const ProductManagement = () => {
                 stock: {},
                 images: []
             });
+
         } catch (error) {
-            toast.error(error.response.data.message);
+            toast.error(error.response?.data?.message || 'Error saving product');
         }
     };
 
@@ -286,7 +339,7 @@ const ProductManagement = () => {
 
     const genres = ['Anime', 'Movies & Series', 'Superhero', 'Abstract', 'Bangla O Bangali', 'Drip & Doodle', 'Sports', 'Music & Band'];
 
-    const sizes = ['M', 'L', 'XL'];
+    const sizes = ['S', 'M', 'L', 'XL', 'XXL'];
 
     const [isAdd, setIsAdd] = useState(false);
 
@@ -338,6 +391,7 @@ const ProductManagement = () => {
                         category: '',
                         subcategory: '',
                         genre: [],
+                        isSolid: false,
                         color: '',
                         size: [],
                         gsm: '',
@@ -356,466 +410,504 @@ const ProductManagement = () => {
             </div>
 
             {
-                isAdd && <div className="w-full flex items-start justify-start">
-                    <form className='w-[60%] flex flex-col items-center justify-start gap-6 my-4'>
-                        <div className='w-full flex flex-col items-start gap-1'>
-                            <label htmlFor="title" className="font-semibold text-lg">
-                                Title
-                            </label>
-                            <input
-                                type="text"
-                                id="title"
-                                name="title"
-                                value={newPdt.title}
-                                onChange={handleChange}
-                                className="w-full bg-transparent border-b border-solid border-black p-1 outline-none"
-                                placeholder="Type here..."
-                            />
+                isAdd && (
+                    loading ? (
+                        <div className="w-full flex justify-center items-center py-10">
+                            <Loader />
                         </div>
-
-                        <div className='w-full flex flex-col items-start gap-1'>
-                            <label htmlFor="style" className="font-semibold text-lg">
-                                Style
-                            </label>
-                            <input
-                                type="text"
-                                id="style"
-                                name="style"
-                                value={newPdt.style}
-                                onChange={handleChange}
-                                className="w-full bg-transparent border-b border-solid border-black p-1 outline-none"
-                                placeholder="Type here..."
-                            />
-                        </div>
-
-                        <div className="w-full flex items-center justify-start gap-4">
-                            <div className="w-full flex flex-col items-start gap-1">
-                                <label htmlFor="mrp" className="font-semibold text-lg">
-                                    MRP
-                                </label>
-                                <input
-                                    type="number"
-                                    id="mrp"
-                                    name="mrp"
-                                    value={newPdt.mrp}
-                                    onChange={handleChange}
-                                    className="w-full bg-transparent border-b border-solid border-black p-1 outline-none"
-                                    placeholder="Type here..."
-                                />
-                            </div>
-                            <div className="w-full flex flex-col items-start gap-1">
-                                <label htmlFor="discount" className="font-semibold text-lg">
-                                    Discount (%)
-                                </label>
-                                <input
-                                    type="number"
-                                    id="discount"
-                                    name="discount"
-                                    value={newPdt.discount}
-                                    onChange={handleChange}
-                                    className="w-full bg-transparent border-b border-solid border-black p-1 outline-none"
-                                    placeholder="Type here..."
-                                />
-                            </div>
-                            <div className="w-full flex flex-col items-start gap-1">
-                                <label htmlFor="offerPrice" className="font-semibold text-lg">
-                                    Offer Price
-                                </label>
-                                <input
-                                    type="number"
-                                    id="offerPrice"
-                                    name="offerPrice"
-                                    value={newPdt.offerPrice}
-                                    onChange={handleChange}
-                                    className="w-full bg-transparent border-b border-solid border-black p-1 outline-none"
-                                    placeholder="Type here..."
-                                    disabled
-                                />
-                            </div>
-                        </div>
-
-                        <div className="w-full flex flex-col items-start gap-1">
-                            <label htmlFor="gender" className="font-semibold text-lg">
-                                Gender
-                            </label>
-                            <select
-                                id="gender"
-                                name="gender"
-                                value={newPdt.gender}
-                                onChange={handleChange}
-                                className="w-[50%] bg-transparent border-b border-solid border-black p-1 outline-none"
-                            >
-                                <option value="">Select Gender</option>
-                                <option value="Male">Male</option>
-                                <option value="Female">Female</option>
-                            </select>
-                        </div>
-
-                        <div className="w-full flex items-center justify-start gap-4">
-                            <div className="w-full flex flex-col items-start gap-1">
-                                <label htmlFor="category" className="font-semibold text-lg">
-                                    Category
-                                </label>
-                                <select
-                                    id="category"
-                                    name="category"
-                                    value={newPdt.category}
-                                    onChange={handleChange}
-                                    className="w-full bg-transparent border-b border-solid border-black p-1 outline-none"
-                                >
-                                    <option value="">Select Category</option>
-                                    {categories.map((cat) => (
-                                        <option key={cat.value} value={cat.value}>
-                                            {cat.value}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div className="w-full flex flex-col items-start gap-1">
-                                <label htmlFor="subcategory" className="font-semibold text-lg">
-                                    Subcategory
-                                </label>
-                                <select
-                                    id="subcategory"
-                                    name="subcategory"
-                                    value={newPdt.subcategory}
-                                    onChange={handleChange}
-                                    className="w-full bg-transparent border-b border-solid border-black p-1 outline-none"
-                                    disabled={!subcategories.length}
-                                >
-                                    <option value="">Select Subcategory</option>
-                                    {subcategories.map((subcat) => (
-                                        <option key={subcat} value={subcat}>
-                                            {subcat}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                        </div>
-
-                        <div className="w-full flex flex-col items-start gap-1">
-                            <label htmlFor="genre" className="font-semibold text-lg">
-                                Genre
-                            </label>
-                            <div className="w-full flex flex-wrap gap-2">
-                                {genres.map((gen) => (
-                                    <div
-                                        key={gen}
-                                        className={`cursor-pointer px-3 py-1 rounded-md ${newPdt.genre.includes(gen)
-                                            ? 'bg-blue-500 text-white'
-                                            : 'bg-gray-200 text-black'
-                                            }`}
-                                        onClick={() =>
-                                            setNewPdt((prev) => ({
-                                                ...prev,
-                                                genre: prev.genre.includes(gen)
-                                                    ? prev.genre.filter((g) => g !== gen)
-                                                    : [...prev.genre, gen],
-                                            }))
-                                        }
-                                    >
-                                        {gen}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="w-full flex flex-col items-start gap-1">
-                            <label htmlFor="highlight" className="font-semibold text-lg">
-                                Highlight
-                            </label>
-                            <textarea
-                                id="highlight"
-                                name="highlight"
-                                value={newPdt.highlight}
-                                onChange={handleChange}
-                                rows="2"
-                                className="w-full bg-transparent border-b border-solid border-black p-1 outline-none"
-                                placeholder="Type here..."
-                            />
-                        </div>
-
-                        <div className="w-full text-left text-black font-semibold text-lg bg-main p-1 pl-2.5 rounded-md">Product Description:</div>
-
-                        <div className="w-full flex items-center justify-start gap-4">
-                            <div className='w-full flex flex-col items-start gap-1'>
-                                <label htmlFor="code" className="font-semibold text-lg">
-                                    Product Code
-                                </label>
-                                <input
-                                    type="text"
-                                    id="code"
-                                    name="code"
-                                    value={newPdt.code}
-                                    onChange={handleChange}
-                                    className="w-full bg-transparent border-b border-solid border-black p-1 outline-none"
-                                    placeholder="Type here..."
-                                />
-                            </div>
-                            <div className='w-full flex flex-col items-start gap-1'>
-                                <label htmlFor="gsm" className="font-semibold text-lg">
-                                    GSM
-                                </label>
-                                <input
-                                    type="text"
-                                    id="gsm"
-                                    name="gsm"
-                                    value={newPdt.gsm}
-                                    onChange={handleChange}
-                                    className="w-full bg-transparent border-b border-solid border-black p-1 outline-none"
-                                    placeholder="Type here..."
-                                />
-                            </div>
-                        </div>
-
-                        <div className="w-full flex items-center justify-start gap-4">
-                            <div className='w-full flex flex-col items-start gap-1'>
-                                <label htmlFor="color" className="font-semibold text-lg">
-                                    Color
-                                </label>
-                                <input
-                                    type="text"
-                                    id="color"
-                                    name="color"
-                                    value={newPdt.color}
-                                    onChange={handleChange}
-                                    className="w-full bg-transparent border-b border-solid border-black p-1 outline-none"
-                                    placeholder="Type here..."
-                                />
-                            </div>
-                            <div className='w-full flex flex-col items-start gap-1'>
-                                <label htmlFor="sleeve" className="font-semibold text-lg">
-                                    Sleeve length
-                                </label>
-                                <input
-                                    type="text"
-                                    id="sleeve"
-                                    name="sleeve"
-                                    value={newPdt.sleeve}
-                                    onChange={handleChange}
-                                    className="w-full bg-transparent border-b border-solid border-black p-1 outline-none"
-                                    placeholder="Type here..."
-                                />
-                            </div>
-                            <div className='w-full flex flex-col items-start gap-1'>
-                                <label htmlFor="fit" className="font-semibold text-lg">
-                                    Fit
-                                </label>
-                                <input
-                                    type="text"
-                                    id="fit"
-                                    name="fit"
-                                    value={newPdt.fit}
-                                    onChange={handleChange}
-                                    className="w-full bg-transparent border-b border-solid border-black p-1 outline-none"
-                                    placeholder="Type here..."
-                                />
-                            </div>
-                        </div>
-
-                        <div className="w-full flex items-center justify-start gap-4">
-                            <div className='w-full flex flex-col items-start gap-1'>
-                                <label htmlFor="neckType" className="font-semibold text-lg">
-                                    Neck type
-                                </label>
-                                <input
-                                    type="text"
-                                    id="neckType"
-                                    name="neckType"
-                                    value={newPdt.neckType}
-                                    onChange={handleChange}
-                                    className="w-full bg-transparent border-b border-solid border-black p-1 outline-none"
-                                    placeholder="Type here..."
-                                />
-                            </div>
-                            <div className='w-full flex flex-col items-start gap-1'>
-                                <label htmlFor="pattern" className="font-semibold text-lg">
-                                    Pattern
-                                </label>
-                                <input
-                                    type="text"
-                                    id="pattern"
-                                    name="pattern"
-                                    value={newPdt.pattern}
-                                    onChange={handleChange}
-                                    className="w-full bg-transparent border-b border-solid border-black p-1 outline-none"
-                                    placeholder="Type here..."
-                                />
-                            </div>
-                            <div className='w-full flex flex-col items-start gap-1'>
-                                <label htmlFor="material" className="font-semibold text-lg">
-                                    Material
-                                </label>
-                                <input
-                                    type="text"
-                                    id="material"
-                                    name="material"
-                                    value={newPdt.material}
-                                    onChange={handleChange}
-                                    className="w-full bg-transparent border-b border-solid border-black p-1 outline-none"
-                                    placeholder="Type here..."
-                                />
-                            </div>
-                        </div>
-
-                        <div className='w-full flex flex-col items-start gap-1'>
-                            <label htmlFor="aboutDesign" className="font-semibold text-lg">
-                                About the Design
-                            </label>
-                            <input
-                                type="text"
-                                id="aboutDesign"
-                                name="aboutDesign"
-                                value={newPdt.aboutDesign}
-                                onChange={handleChange}
-                                className="w-full bg-transparent border-b border-solid border-black p-1 outline-none"
-                                placeholder="Type here..."
-                            />
-                        </div>
-
-                        <div className="w-full flex items-center justify-start gap-4">
-                            <div className='w-full flex flex-col items-start gap-1'>
-                                <label className="font-semibold text-lg">
-                                    Country of Origin
-                                </label>
-                                <input
-                                    type="text"
-                                    value="India"
-                                    className="w-full bg-transparent border-b border-solid border-black p-1 outline-none"
-                                    disabled
-                                />
-                            </div>
-                            <div className='w-full flex flex-col items-start gap-1'>
-                                <label className="font-semibold text-lg">
-                                    Care Instruction
-                                </label>
-                                <input
-                                    type="text"
-                                    value="Please read the brand tag."
-                                    className="w-full bg-transparent border-b border-solid border-black p-1 outline-none"
-                                    disabled
-                                />
-                            </div>
-                        </div>
-
-                        <div className="w-full text-left text-black font-semibold text-lg bg-main p-1 pl-2.5 rounded-md">Size & Stock details:</div>
-
-                        <div className="w-full flex flex-col items-start gap-1">
-                            <label htmlFor="size" className="font-semibold text-lg">
-                                Available sizes
-                            </label>
-                            <div className="w-full flex flex-wrap gap-2">
-                                {sizes.map((size) => (
-                                    <div
-                                        key={size}
-                                        className={`cursor-pointer px-3 py-1 rounded-md ${newPdt.size.includes(size)
-                                            ? 'bg-blue-500 text-white'
-                                            : 'bg-gray-200 text-black'
-                                            }`}
-                                        onClick={() =>
-                                            setNewPdt((prev) => ({
-                                                ...prev,
-                                                size: prev.size.includes(size)
-                                                    ? prev.size.filter((g) => g !== size)
-                                                    : [...prev.size, size],
-                                            }))
-                                        }
-                                    >
-                                        {size}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="w-full flex flex-col items-start gap-1">
-                            <label htmlFor="stock" className="font-semibold text-lg">
-                                Stock details
-                            </label>
-                            {newPdt.size.length > 0 ?
-                                <div className="w-full flex flex-wrap gap-4 mt-4">
-                                    {newPdt.size.map((size) => (
-                                        <div key={size} className="flex items-center gap-1">
-                                            <label htmlFor={`stock-${size}`} className="font-medium text-md">
-                                                {size}:
-                                            </label>
-                                            <input
-                                                type="number"
-                                                id={`stock-${size}`}
-                                                name={`stock-${size}`}
-                                                value={newPdt.stock?.[size] || ''}
-                                                onChange={(e) =>
-                                                    setNewPdt((prev) => ({
-                                                        ...prev,
-                                                        stock: {
-                                                            ...prev.stock,
-                                                            [size]: Number(e.target.value),
-                                                        },
-                                                    }))
-                                                }
-                                                className="w-[5rem] bg-transparent border-b border-solid border-black p-1 outline-none"
-                                            />
-                                        </div>
-                                    ))}
-                                </div> :
-                                <div>No size selected!</div>
-                            }
-                        </div>
-
-                        <div className="w-full text-left text-black font-semibold text-lg bg-main p-1 pl-2.5 rounded-md">Product Images:</div>
-
-                        <ImageUpload newPdt={newPdt} setNewPdt={setNewPdt} />
-
-                        {
-                            newPdt.thumbnail && isUpdate ?
-                                <div className='w-full flex flex-col items-start gap-2'>
-                                    <div className='font-semibold'>Uploaded thumbnail:</div>
-                                    <img className='w-[8rem] aspect-auto' src={newPdt.thumbnail} alt="thumbnail" />
+                    ) : (
+                        <div className="w-full flex items-start justify-start">
+                            <form className='w-[60%] flex flex-col items-center justify-start gap-6 my-4'>
+                                <div className='w-full flex flex-col items-start gap-1'>
+                                    <label htmlFor="title" className="font-semibold text-lg">
+                                        Title
+                                    </label>
+                                    <input
+                                        type="text"
+                                        id="title"
+                                        name="title"
+                                        value={newPdt.title}
+                                        onChange={handleChange}
+                                        className="w-full bg-transparent border-b border-solid border-black p-1 outline-none"
+                                        placeholder="Type here..."
+                                    />
                                 </div>
-                                : null
-                        }
 
-                        <div className='w-full flex items-center justify-start gap-4'>
-                            <label htmlFor="images" className="font-semibold text-lg text-nowrap">Product Images:</label>
-                            <input
-                                type="file"
-                                id="images"
-                                accept="image/*"
-                                multiple
-                                onChange={(e) => setNewPdt({ ...newPdt, images: Array.from(e.target.files) })}
-                            />
-                        </div>
-                        <div className='w-full flex flex-col items-start gap-2'>
-                            { newPdt.images.length != 0 && <p className="text-sm font-medium text-gray-700">Image preview:</p> }
-                            <div className="w-full flex items-start justify-start gap-3.5">
-                                {newPdt.images && newPdt.images.map((image, index) => (
-                                    <div key={index}>
-                                        <img
-                                            src={image instanceof File ? URL.createObjectURL(image) : image}
-                                            alt={`Product-${index}`}
-                                            className='w-[8rem] aspect-auto'
+                                <div className='w-full flex flex-col items-start gap-1'>
+                                    <label htmlFor="style" className="font-semibold text-lg">
+                                        Style
+                                    </label>
+                                    <input
+                                        type="text"
+                                        id="style"
+                                        name="style"
+                                        value={newPdt.style}
+                                        onChange={handleChange}
+                                        className="w-full bg-transparent border-b border-solid border-black p-1 outline-none"
+                                        placeholder="Type here..."
+                                    />
+                                </div>
+
+                                <div className="w-full flex items-center justify-start gap-4">
+                                    <div className="w-full flex flex-col items-start gap-1">
+                                        <label htmlFor="mrp" className="font-semibold text-lg">
+                                            MRP
+                                        </label>
+                                        <input
+                                            type="number"
+                                            id="mrp"
+                                            name="mrp"
+                                            value={newPdt.mrp}
+                                            onChange={handleChange}
+                                            className="w-full bg-transparent border-b border-solid border-black p-1 outline-none"
+                                            placeholder="Type here..."
                                         />
                                     </div>
-                                ))}
-                            </div>
+                                    <div className="w-full flex flex-col items-start gap-1">
+                                        <label htmlFor="discount" className="font-semibold text-lg">
+                                            Discount (%)
+                                        </label>
+                                        <input
+                                            type="number"
+                                            id="discount"
+                                            name="discount"
+                                            value={newPdt.discount}
+                                            onChange={handleChange}
+                                            className="w-full bg-transparent border-b border-solid border-black p-1 outline-none"
+                                            placeholder="Type here..."
+                                        />
+                                    </div>
+                                    <div className="w-full flex flex-col items-start gap-1">
+                                        <label htmlFor="offerPrice" className="font-semibold text-lg">
+                                            Offer Price
+                                        </label>
+                                        <input
+                                            type="number"
+                                            id="offerPrice"
+                                            name="offerPrice"
+                                            value={newPdt.offerPrice}
+                                            onChange={handleChange}
+                                            className="w-full bg-transparent border-b border-solid border-black p-1 outline-none"
+                                            placeholder="Type here..."
+                                            disabled
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="w-full flex flex-col items-start gap-1">
+                                    <label htmlFor="gender" className="font-semibold text-lg">
+                                        Gender
+                                    </label>
+                                    <select
+                                        id="gender"
+                                        name="gender"
+                                        value={newPdt.gender}
+                                        onChange={handleChange}
+                                        className="w-[50%] bg-transparent border-b border-solid border-black p-1 outline-none"
+                                    >
+                                        <option value="">Select Gender</option>
+                                        <option value="Male">Male</option>
+                                        <option value="Female">Female</option>
+                                    </select>
+                                </div>
+
+                                <div className="w-full flex items-center justify-start gap-4">
+                                    <div className="w-full flex flex-col items-start gap-1">
+                                        <label htmlFor="category" className="font-semibold text-lg">
+                                            Category
+                                        </label>
+                                        <select
+                                            id="category"
+                                            name="category"
+                                            value={newPdt.category}
+                                            onChange={handleChange}
+                                            className="w-full bg-transparent border-b border-solid border-black p-1 outline-none"
+                                        >
+                                            <option value="">Select Category</option>
+                                            {categories.map((cat) => (
+                                                <option key={cat.value} value={cat.value}>
+                                                    {cat.value}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    <div className="w-full flex flex-col items-start gap-1">
+                                        <label htmlFor="subcategory" className="font-semibold text-lg">
+                                            Subcategory
+                                        </label>
+                                        <select
+                                            id="subcategory"
+                                            name="subcategory"
+                                            value={newPdt.subcategory}
+                                            onChange={handleChange}
+                                            className="w-full bg-transparent border-b border-solid border-black p-1 outline-none"
+                                            disabled={!subcategories.length}
+                                        >
+                                            <option value="">Select Subcategory</option>
+                                            {subcategories.map((subcat) => (
+                                                <option key={subcat} value={subcat}>
+                                                    {subcat}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className='w-full flex flex-col items-start gap-1'>
+                                    <label htmlFor="genre" className="font-semibold text-lg">
+                                        Solid / Printed
+                                    </label>
+                                    <div className="w-full flex items-center gap-2">
+                                        <input
+                                            type="checkbox"
+                                            id="isSolid"
+                                            checked={newPdt.isSolid}
+                                            onChange={(e) => {
+                                                const checked = e.target.checked;
+
+                                                setNewPdt((prev) => ({
+                                                    ...prev,
+                                                    isSolid: checked,
+                                                    genre: checked ? [] : prev.genre,
+                                                }));
+                                            }}
+                                        />
+                                        <label htmlFor="isSolid" className="font-medium text-lg">
+                                            is the pattern <span className="font-semibold">Solid</span>?
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div className="w-full flex flex-col items-start gap-1">
+                                    <label htmlFor="genre" className="font-semibold text-lg">
+                                        Genre
+                                    </label>
+                                    <div className="w-full flex flex-wrap gap-2">
+                                        {genres.map((gen) => (
+                                            <div
+                                                key={gen}
+                                                className={`cursor-pointer px-3 py-1 rounded-md ${newPdt.isSolid
+                                                    ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                                                    : newPdt.genre.includes(gen)
+                                                        ? "bg-blue-500 text-white"
+                                                        : "bg-gray-200 text-black"
+                                                    }`}
+                                                onClick={() => {
+                                                    if (newPdt.isSolid) return; // ✅ prevent click
+
+                                                    setNewPdt((prev) => ({
+                                                        ...prev,
+                                                        genre: prev.genre.includes(gen)
+                                                            ? prev.genre.filter((g) => g !== gen)
+                                                            : [...prev.genre, gen],
+                                                    }));
+                                                }}
+                                            >
+                                                {gen}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="w-full flex flex-col items-start gap-1">
+                                    <label htmlFor="highlight" className="font-semibold text-lg">
+                                        Highlight
+                                    </label>
+                                    <textarea
+                                        id="highlight"
+                                        name="highlight"
+                                        value={newPdt.highlight}
+                                        onChange={handleChange}
+                                        rows="2"
+                                        className="w-full bg-transparent border-b border-solid border-black p-1 outline-none"
+                                        placeholder="Type here..."
+                                    />
+                                </div>
+
+                                <div className="w-full text-left text-black font-semibold text-lg bg-main p-1 pl-2.5 rounded-md">Product Description:</div>
+
+                                <div className="w-full flex items-center justify-start gap-4">
+                                    <div className='w-full flex flex-col items-start gap-1'>
+                                        <label htmlFor="code" className="font-semibold text-lg">
+                                            Product Code
+                                        </label>
+                                        <input
+                                            type="text"
+                                            id="code"
+                                            name="code"
+                                            value={newPdt.code}
+                                            onChange={handleChange}
+                                            className="w-full bg-transparent border-b border-solid border-black p-1 outline-none"
+                                            placeholder="Type here..."
+                                        />
+                                    </div>
+                                    <div className='w-full flex flex-col items-start gap-1'>
+                                        <label htmlFor="gsm" className="font-semibold text-lg">
+                                            GSM
+                                        </label>
+                                        <input
+                                            type="text"
+                                            id="gsm"
+                                            name="gsm"
+                                            value={newPdt.gsm}
+                                            onChange={handleChange}
+                                            className="w-full bg-transparent border-b border-solid border-black p-1 outline-none"
+                                            placeholder="Type here..."
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="w-full flex items-center justify-start gap-4">
+                                    <div className='w-full flex flex-col items-start gap-1'>
+                                        <label htmlFor="color" className="font-semibold text-lg">
+                                            Color
+                                        </label>
+                                        <input
+                                            type="text"
+                                            id="color"
+                                            name="color"
+                                            value={newPdt.color}
+                                            onChange={handleChange}
+                                            className="w-full bg-transparent border-b border-solid border-black p-1 outline-none"
+                                            placeholder="Type here..."
+                                        />
+                                    </div>
+                                    <div className='w-full flex flex-col items-start gap-1'>
+                                        <label htmlFor="sleeve" className="font-semibold text-lg">
+                                            Sleeve length
+                                        </label>
+                                        <input
+                                            type="text"
+                                            id="sleeve"
+                                            name="sleeve"
+                                            value={newPdt.sleeve}
+                                            onChange={handleChange}
+                                            className="w-full bg-transparent border-b border-solid border-black p-1 outline-none"
+                                            placeholder="Type here..."
+                                        />
+                                    </div>
+                                    <div className='w-full flex flex-col items-start gap-1'>
+                                        <label htmlFor="fit" className="font-semibold text-lg">
+                                            Fit
+                                        </label>
+                                        <input
+                                            type="text"
+                                            id="fit"
+                                            name="fit"
+                                            value={newPdt.fit}
+                                            onChange={handleChange}
+                                            className="w-full bg-transparent border-b border-solid border-black p-1 outline-none"
+                                            placeholder="Type here..."
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="w-full flex items-center justify-start gap-4">
+                                    <div className='w-full flex flex-col items-start gap-1'>
+                                        <label htmlFor="neckType" className="font-semibold text-lg">
+                                            Neck type
+                                        </label>
+                                        <input
+                                            type="text"
+                                            id="neckType"
+                                            name="neckType"
+                                            value={newPdt.neckType}
+                                            onChange={handleChange}
+                                            className="w-full bg-transparent border-b border-solid border-black p-1 outline-none"
+                                            placeholder="Type here..."
+                                        />
+                                    </div>
+                                    <div className='w-full flex flex-col items-start gap-1'>
+                                        <label htmlFor="pattern" className="font-semibold text-lg">
+                                            Pattern
+                                        </label>
+                                        <input
+                                            type="text"
+                                            id="pattern"
+                                            name="pattern"
+                                            value={newPdt.pattern}
+                                            onChange={handleChange}
+                                            className="w-full bg-transparent border-b border-solid border-black p-1 outline-none"
+                                            placeholder="Type here..."
+                                        />
+                                    </div>
+                                    <div className='w-full flex flex-col items-start gap-1'>
+                                        <label htmlFor="material" className="font-semibold text-lg">
+                                            Material
+                                        </label>
+                                        <input
+                                            type="text"
+                                            id="material"
+                                            name="material"
+                                            value={newPdt.material}
+                                            onChange={handleChange}
+                                            className="w-full bg-transparent border-b border-solid border-black p-1 outline-none"
+                                            placeholder="Type here..."
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className='w-full flex flex-col items-start gap-1'>
+                                    <label htmlFor="aboutDesign" className="font-semibold text-lg">
+                                        About the Design
+                                    </label>
+                                    <input
+                                        type="text"
+                                        id="aboutDesign"
+                                        name="aboutDesign"
+                                        value={newPdt.aboutDesign}
+                                        onChange={handleChange}
+                                        className="w-full bg-transparent border-b border-solid border-black p-1 outline-none"
+                                        placeholder="Type here..."
+                                    />
+                                </div>
+
+                                <div className="w-full flex items-center justify-start gap-4">
+                                    <div className='w-full flex flex-col items-start gap-1'>
+                                        <label className="font-semibold text-lg">
+                                            Country of Origin
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value="India"
+                                            className="w-full bg-transparent border-b border-solid border-black p-1 outline-none"
+                                            disabled
+                                        />
+                                    </div>
+                                    <div className='w-full flex flex-col items-start gap-1'>
+                                        <label className="font-semibold text-lg">
+                                            Care Instruction
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value="Please read the brand tag."
+                                            className="w-full bg-transparent border-b border-solid border-black p-1 outline-none"
+                                            disabled
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="w-full text-left text-black font-semibold text-lg bg-main p-1 pl-2.5 rounded-md">Size & Stock details:</div>
+
+                                <div className="w-full flex flex-col items-start gap-1">
+                                    <label htmlFor="size" className="font-semibold text-lg">
+                                        Available sizes
+                                    </label>
+                                    <div className="w-full flex flex-wrap gap-2">
+                                        {sizes.map((size) => (
+                                            <div
+                                                key={size}
+                                                className={`cursor-pointer px-3 py-1 rounded-md ${newPdt.size.includes(size)
+                                                    ? 'bg-blue-500 text-white'
+                                                    : 'bg-gray-200 text-black'
+                                                    }`}
+                                                onClick={() =>
+                                                    setNewPdt((prev) => ({
+                                                        ...prev,
+                                                        size: prev.size.includes(size)
+                                                            ? prev.size.filter((g) => g !== size)
+                                                            : [...prev.size, size],
+                                                    }))
+                                                }
+                                            >
+                                                {size}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="w-full flex flex-col items-start gap-1">
+                                    <label htmlFor="stock" className="font-semibold text-lg">
+                                        Stock details
+                                    </label>
+                                    {newPdt.size.length > 0 ?
+                                        <div className="w-full flex flex-wrap gap-4 mt-4">
+                                            {newPdt.size.map((size) => (
+                                                <div key={size} className="flex items-center gap-1">
+                                                    <label htmlFor={`stock-${size}`} className="font-medium text-md">
+                                                        {size}:
+                                                    </label>
+                                                    <input
+                                                        type="number"
+                                                        id={`stock-${size}`}
+                                                        name={`stock-${size}`}
+                                                        value={newPdt.stock?.[size] || ''}
+                                                        onChange={(e) =>
+                                                            setNewPdt((prev) => ({
+                                                                ...prev,
+                                                                stock: {
+                                                                    ...prev.stock,
+                                                                    [size]: Number(e.target.value),
+                                                                },
+                                                            }))
+                                                        }
+                                                        className="w-[5rem] bg-transparent border-b border-solid border-black p-1 outline-none"
+                                                    />
+                                                </div>
+                                            ))}
+                                        </div> :
+                                        <div>No size selected!</div>
+                                    }
+                                </div>
+
+                                <div className="w-full text-left text-black font-semibold text-lg bg-main p-1 pl-2.5 rounded-md">Product Images:</div>
+
+                                <ImageUpload newPdt={newPdt} setNewPdt={setNewPdt} />
+
+                                {
+                                    newPdt.thumbnail && isUpdate ?
+                                        <div className='w-full flex flex-col items-start gap-2'>
+                                            <div className='font-semibold'>Uploaded thumbnail:</div>
+                                            <img className='w-[8rem] aspect-auto' src={newPdt.thumbnail} alt="thumbnail" />
+                                        </div>
+                                        : null
+                                }
+
+                                <div className='w-full flex items-center justify-start gap-4'>
+                                    <label htmlFor="images" className="font-semibold text-lg text-nowrap">Product Images:</label>
+                                    <input
+                                        type="file"
+                                        id="images"
+                                        accept="image/*"
+                                        multiple
+                                        onChange={(e) => setNewPdt({ ...newPdt, images: Array.from(e.target.files) })}
+                                    />
+                                </div>
+                                <div className='w-full flex flex-col items-start gap-2'>
+                                    {newPdt.images.length != 0 && <p className="text-sm font-medium text-gray-700">Image preview:</p>}
+                                    <div className="w-full flex items-start justify-start gap-3.5">
+                                        {newPdt.images && newPdt.images.map((image, index) => (
+                                            <div key={index}>
+                                                <img
+                                                    src={image instanceof File ? URL.createObjectURL(image) : image}
+                                                    alt={`Product-${index}`}
+                                                    className='w-[8rem] aspect-auto'
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+
+                                <div className="w-full flex items-center justify-end gap-2.5">
+                                    <button onClick={(e) => { e.preventDefault(); setIsAdd(false) }}
+                                        className='bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition'>
+                                        Close
+                                    </button>
+                                    <button
+                                        type="submit" onClick={handleSubmit}
+                                        className="bg-black text-white px-4 py-2 rounded-md hover:bg-gray-800 transition"
+                                    >
+                                        {isUpdate ? 'Update' : 'Submit'}
+                                    </button>
+                                </div>
+
+                            </form>
                         </div>
+                    )
+                )
 
-
-                        <div className="w-full flex items-center justify-end gap-2.5">
-                            <button onClick={(e) => { e.preventDefault(); setIsAdd(false) }}
-                                className='bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition'>
-                                Close
-                            </button>
-                            <button
-                                type="submit" onClick={handleSubmit}
-                                className="bg-black text-white px-4 py-2 rounded-md hover:bg-gray-800 transition"
-                            >
-                                {isUpdate ? 'Update' : 'Submit'}
-                            </button>
-                        </div>
-
-                    </form>
-                </div>
             }
 
             {
@@ -873,19 +965,33 @@ const ProductManagement = () => {
                                                         </div>
                                                     </div>
 
-                                                    <div className="w-full flex items-center justify-start gap-2 font-semibold my-1">
-                                                        <div>Genre:</div>
-                                                        <div className="flex flex-wrap items-center justify-start gap-2 font-normal">
-                                                            {
-                                                                pdt.genre.length === 0 ? <div>Not found!</div> :
-                                                                    pdt.genre.map((gen) => {
-                                                                        return (
-                                                                            <div key={gen} className='px-3 py-1 rounded-md bg-blue-600 text-white'>{gen}</div>
-                                                                        )
-                                                                    })
-                                                            }
-                                                        </div>
+                                                    <div className="w-full text-left font-semibold">
+                                                        Type:{" "}
+                                                        <span
+                                                            className={`font-semibold ${pdt.isSolid ? "text-green-600" : "text-blue-600"
+                                                                }`}
+                                                        >
+                                                            {pdt.isSolid ? "Solid" : "Printed"}
+                                                        </span>
                                                     </div>
+
+                                                    {
+                                                        !pdt.isSolid && (
+                                                            <div className="w-full flex items-center justify-start gap-2 font-semibold my-1">
+                                                                <div>Genre:</div>
+                                                                <div className="flex flex-wrap items-center justify-start gap-2 font-normal">
+                                                                    {
+                                                                        pdt.genre.length === 0 ? <div>Not found!</div> :
+                                                                            pdt.genre.map((gen) => {
+                                                                                return (
+                                                                                    <div key={gen} className='px-3 py-1 rounded-md bg-blue-600 text-white'>{gen}</div>
+                                                                                )
+                                                                            })
+                                                                    }
+                                                                </div>
+                                                            </div>
+                                                        )
+                                                    }
 
                                                     <div className="w-fit bg-black text-main px-2 py-1 rounded-md mt-2">Product Description:</div>
                                                     <div className="w-full flex flex-wrap items-center justify-start gap-2 gap-y-0.5 mb-2">
@@ -944,23 +1050,48 @@ const ProductManagement = () => {
                                                             {pdt.size.length === 0 ? (
                                                                 <div>Not found!</div>
                                                             ) : (
-                                                                pdt.size.map((size) => (
-                                                                    <div key={size} className="flex gap-1">
-                                                                        <span>{size}:</span>
-                                                                        <span className={`font-medium ${pdt.stock[size] > 0 ? 'text-green-600' : 'text-red-500'}`}>
-                                                                            {pdt.stock[size] || 0}
-                                                                        </span>
-                                                                    </div>
-                                                                ))
+                                                                pdt.size.map((size) => {
+                                                                    const stockObj = Array.isArray(pdt.stock)
+                                                                        ? pdt.stock[0]
+                                                                        : pdt.stock;
+
+                                                                    return (
+                                                                        <div key={size} className="flex gap-1">
+                                                                            <span>{size}:</span>
+                                                                            <span
+                                                                                className={`font-medium ${stockObj?.[size] > 0
+                                                                                    ? 'text-green-600'
+                                                                                    : 'text-red-500'
+                                                                                    }`}
+                                                                            >
+                                                                                {stockObj?.[size] || 0}
+                                                                            </span>
+                                                                        </div>
+                                                                    );
+                                                                })
                                                             )}
                                                         </div>
                                                     </div>
-
                                                 </div>
                                             </div>
                                             <div className="flex items-center justify-center gap-2 px-6 py-4">
-                                                <FiEdit onClick={() => { setIsAdd(true); setIsUpdate(true); updateProduct(pdt._id); setCurrId(pdt._id) }} className='text-xl cursor-pointer text-gray-800' />
-                                                <MdOutlineDelete onClick={() => { handleOpen(); setCurrId(pdt._id) }} className='text-2xl text-red-600 cursor-pointer' />
+                                                <FiEdit
+                                                    onClick={async () => {
+                                                        setIsAdd(true);
+                                                        setIsUpdate(true);
+                                                        setCurrId(pdt._id);
+                                                        setLoading(true);
+                                                        await updateProduct(pdt._id);
+                                                        setLoading(false);
+                                                    }}
+                                                    className='text-xl cursor-pointer text-gray-800'
+                                                />
+                                                <MdOutlineDelete
+                                                    onClick={() => {
+                                                        handleOpen();
+                                                        setCurrId(pdt._id)
+                                                    }}
+                                                    className='text-2xl text-red-600 cursor-pointer' />
                                             </div>
                                         </div>
                                     )
