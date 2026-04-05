@@ -359,6 +359,9 @@ const ProductManagement = () => {
     const [currId, setCurrId] = useState(null);
 
     const handleProductDelete = async () => {
+
+        setSubmitLoading(true);
+
         try {
             const response = await axios.delete(`${backendServer}/api/deleteProduct/${currId}`);
             handleOpen();
@@ -367,6 +370,8 @@ const ProductManagement = () => {
             getAllProducts();
         } catch (error) {
             toast.error(error.response.data.message);
+        } finally {
+            setSubmitLoading(false);
         }
     };
 
@@ -1148,11 +1153,15 @@ const ProductManagement = () => {
             <Dialog open={open} handler={handleOpen} className='w-full p-4 bg-white flex flex-col items-center justify-start gap-4'>
                 <div className="w-full text-left text-black text-base">Are you sure you want to delete this item? This action cannot be undone.</div>
                 <div className="w-full flex items-center justify-start gap-4">
-                    <button onClick={handleProductDelete}
-                        className='bg-red-600 text-white px-4 py-1.5 rounded-md hover:bg-red-700 transition'>
+                    <button
+                        onClick={handleProductDelete}
+                        disabled={submitLoading}
+                        className='bg-red-600 text-white px-4 py-1.5 rounded-md hover:bg-red-700 transition disabled:opacity-50'>
                         Delete
                     </button>
-                    <button onClick={handleOpen} className='bg-gray-600 hover:bg-gray-700 text-white px-4 py-1.5 rounded-md'>
+                    <button
+                        onClick={handleOpen}
+                        className='bg-gray-600 hover:bg-gray-700 text-white px-4 py-1.5 rounded-md'>
                         Cancel
                     </button>
                 </div>

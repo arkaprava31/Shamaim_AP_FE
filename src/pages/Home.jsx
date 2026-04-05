@@ -43,10 +43,10 @@ const Home = () => {
                                     className={`w-full p-2.5 text-lg cursor-pointer text-nowrap ${menuID === 1 ? 'bg-secondary font-semibold' : 'bg-main font-medium'}`}>Product Management</div>
 
                                 <div onClick={() => handleMenuID(2)}
-                                    className={`w-full p-2.5 text-lg cursor-pointer text-nowrap ${menuID === 2 ? 'bg-secondary font-semibold' : 'bg-main font-medium'}`}>User Management</div>
+                                    className={`w-full hidden p-2.5 text-lg cursor-pointer text-nowrap ${menuID === 2 ? 'bg-secondary font-semibold' : 'bg-main font-medium'}`}>User Management</div>
 
                                 <div onClick={() => handleMenuID(3)}
-                                    className={`w-full p-2.5 text-lg cursor-pointer text-nowrap ${menuID === 3 ? 'bg-secondary font-semibold' : 'bg-main font-medium'}`}>Orders Management</div>
+                                    className={`w-full hidden p-2.5 text-lg cursor-pointer text-nowrap ${menuID === 3 ? 'bg-secondary font-semibold' : 'bg-main font-medium'}`}>Orders Management</div>
 
                             </div>
                             <div className='w-full max-h-full overflow-y-scroll'>
