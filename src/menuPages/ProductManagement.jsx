@@ -23,6 +23,7 @@ const ProductManagement = () => {
     const [products, setProducts] = useState([]);
 
     const [loading, setLoading] = useState(true);
+    const [submitLoading, setSubmitLoading] = useState(false);
 
     const getAllProducts = async () => {
         try {
@@ -145,6 +146,8 @@ const ProductManagement = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
+        setSubmitLoading(true);
+
         const requiredFields = [
             'title',
             'style',
@@ -174,21 +177,25 @@ const ProductManagement = () => {
 
         if (emptyFields.length > 0) {
             toast.error("All fields are required!");
+            setSubmitLoading(false);
             return;
         }
 
         if (newPdt.mrp <= 0) {
             toast.error("MRP must be greater than 0.");
+            setSubmitLoading(false);
             return;
         }
 
         if (newPdt.discount < 0 || newPdt.discount > 100) {
             toast.error("Discount must be between 0 and 100.");
+            setSubmitLoading(false);
             return;
         }
 
         if (newPdt.size.length === 0) {
             toast.error("Please select at least one size.");
+            setSubmitLoading(false);
             return;
         }
 
@@ -198,21 +205,25 @@ const ProductManagement = () => {
 
         if (invalidStock) {
             toast.error("Enter valid stock values.");
+            setSubmitLoading(false);
             return;
         }
 
         if (!isUpdate && !newPdt.thumbnail) {
             toast.error("Thumbnail is required.");
+            setSubmitLoading(false);
             return;
         }
 
         if (!isUpdate && newPdt.images.length === 0) {
             toast.error("Upload at least one product image.");
+            setSubmitLoading(false);
             return;
         }
 
         if (!newPdt.isSolid && newPdt.genre.length === 0) {
             toast.error("Please select at least one genre for printed products.");
+            setSubmitLoading(false);
             return;
         }
 
@@ -326,6 +337,8 @@ const ProductManagement = () => {
 
         } catch (error) {
             toast.error(error.response?.data?.message || 'Error saving product');
+        } finally {
+            setSubmitLoading(false);
         }
     };
 
@@ -896,10 +909,12 @@ const ProductManagement = () => {
                                         Close
                                     </button>
                                     <button
-                                        type="submit" onClick={handleSubmit}
-                                        className="bg-black text-white px-4 py-2 rounded-md hover:bg-gray-800 transition"
+                                        type="submit"
+                                        onClick={handleSubmit}
+                                        disabled={submitLoading}
+                                        className="bg-black text-white px-4 py-2 rounded-md hover:bg-gray-800 transition disabled:opacity-50"
                                     >
-                                        {isUpdate ? 'Update' : 'Submit'}
+                                        {submitLoading ? 'Saving...' : (isUpdate ? 'Update' : 'Submit')}
                                     </button>
                                 </div>
 
@@ -909,6 +924,14 @@ const ProductManagement = () => {
                 )
 
             }
+
+            {submitLoading && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/30">
+                    <div className="bg-transparent flex items-center justify-center">
+                        <Loader />
+                    </div>
+                </div>
+            )}
 
             {
                 !isAdd && <div className="w-full flex flex-col items-center justify-start gap-4 my-6">
